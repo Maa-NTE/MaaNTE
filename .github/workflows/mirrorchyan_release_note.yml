@@ -11,7 +11,7 @@ on:
 
 jobs:
   mirrorchyan:
-    if: ${{ github.repository_owner == '1bananachicken' }}
+    if: ${{ github.repository_owner == 'Maa-NTE' }}
     runs-on: macos-latest
 
     steps:
@@ -21,7 +21,7 @@ jobs:
           mirrorchyan_rid: MaaNTE
           version_name: ${{ inputs.tag }}
 
-          owner: 1bananachicken
+          owner: Maa-NTE
           repo: MaaNTE
           github_token: ${{ secrets.GITHUB_TOKEN }}
           upload_token: ${{ secrets.MirrorChyanUploadToken }}

@@ -21,7 +21,7 @@ env:
 
 jobs:
   sync-ocr-expected:
-    if: github.event_name == 'workflow_dispatch' || github.repository == '1bananachicken/MaaNTE'
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'Maa-NTE/MaaNTE'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
