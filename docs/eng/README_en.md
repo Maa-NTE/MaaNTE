@@ -53,7 +53,7 @@ Powered by [MaaFramework](https://github.com/MaaXYZ/MaaFramework) !
 >
 > Official Discord: [Discord](https://discord.gg/e6mPMRYQpR)
 
-### ⚠️ Disclaimer and Risk Notice
+## ⚠️ Disclaimer and Risk Notice
 
 > [!Note]
 >
@@ -69,7 +69,7 @@ Powered by [MaaFramework](https://github.com/MaaXYZ/MaaFramework) !
 >
 > **You should fully understand and voluntarily bear all risks that may arise from using this tool.**
 
-### 🧾 Open Source License
+## 🧾 Open Source License
 
 This software is open-sourced under [GNU Affero General Public License v3.0 only](https://spdx.org/licenses/AGPL-3.0-only.html).
 

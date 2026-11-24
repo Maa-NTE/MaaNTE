@@ -186,7 +186,8 @@
             "BidKingWaitBidOrSkip"
         ],
         "next": [
-            "BidKingConfirmBid" // 输入完成后去确认
+            // 输入完成后去确认
+            "BidKingConfirmBid"
         ]
     },
     "BidKingConfirmBid": {
@@ -222,8 +223,25 @@
         "timeout": -1,
         // 动作失败时回到轮询自愈
         "on_error": [
-            "BidKingWaitBidOrSkip"
+            "BidKingConfirmBidFailed"
         ],
+        "next": [
+            "BidKingWaitBidOrSkip"
+        ]
+    },
+    "BidKingConfirmBidFailed": {
+        "desc": "出价确认失败后返回拍卖状态识别",
+        "recognition": {
+            "type": "DirectHit",
+            "param": {}
+        },
+        "action": {
+            "type": "DoNothing",
+            "param": {}
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
         "next": [
             "BidKingWaitBidOrSkip"
         ]
