@@ -53,13 +53,11 @@ import re
 
 _cwd = os.getcwd()
 if re.search(r"[一-鿿　-〿＀-￯]", _cwd):
-    logger.warning(
-        f"当前运行目录含中文或全角字符: {_cwd}\n"
-        "部分组件对此类路径兼容性较差，建议将程序移动至纯英文路径下运行。"
-    )
+    logger.warning(f"当前运行目录含中文或全角字符: {_cwd}\n" "部分组件对此类路径兼容性较差，建议将程序移动至纯英文路径下运行。")
 
 VENV_NAME = ".venv"  # 虚拟环境目录的名称
 VENV_DIR = Path(project_root_dir) / VENV_NAME
+
 
 # -----
 # region 虚拟环境
@@ -107,9 +105,7 @@ def ensure_venv_and_relaunch_if_needed():
             logger.error("正在退出")
             sys.exit(1)
         except FileNotFoundError:
-            logger.error(
-                f"命令 '{sys.executable} -m venv' 未找到。请确保 'venv' 模块可用。"
-            )
+            logger.error(f"命令 '{sys.executable} -m venv' 未找到。请确保 'venv' 模块可用。")
             logger.error("无法在没有虚拟环境的情况下继续。正在退出。")
             sys.exit(1)
 
@@ -140,12 +136,29 @@ def ensure_venv_and_relaunch_if_needed():
         script_abs = current_file_path
         args = sys.argv[1:]
         cmd = [str(python_in_venv), str(script_abs)] + args
+        child_env = os.environ.copy()
+        if sys.platform.startswith("win"):
+            # 直接使用 venv 的基础解释器，避免 Windows 重定向启动器
+            # 给子进程带来的目录访问限制。该变量是 CPython venv 的启动协议，
+            # 会保留 sys.executable、sys.prefix 和 site-packages 的虚拟环境隔离。
+            venv_config = {}
+            for line in (
+                (VENV_DIR / "pyvenv.cfg").read_text(encoding="utf-8").splitlines()
+            ):
+                key, separator, value = line.partition("=")
+                if separator:
+                    venv_config[key.strip()] = value.strip()
+            base_python = Path(venv_config["home"]) / "python.exe"
+            if not base_python.is_file():
+                raise FileNotFoundError(base_python)
+            cmd[0] = str(base_python)
+            child_env["__PYVENV_LAUNCHER__"] = str(python_in_venv)
         logger.info(f"执行命令: {' '.join(cmd)}")
 
         result = subprocess.run(
             cmd,
             cwd=os.getcwd(),
-            env=os.environ.copy(),
+            env=child_env,
             check=False,  # 不在非零退出码时抛出异常
         )
         # 退出时使用子进程的退出码
@@ -440,10 +453,7 @@ def _check_admin_privilege():
     if ctypes.windll.shell32.IsUserAnAdmin():
         return
 
-    logger.warning(
-        "未以管理员权限运行，部分输入功能可能无法正常使用。"
-        "请右键 MaaNTE.exe → 以管理员身份运行。"
-    )
+    logger.warning("未以管理员权限运行，部分输入功能可能无法正常使用。" "请右键 MaaNTE.exe → 以管理员身份运行。")
 
 
 def _check_game_resolution():
@@ -465,9 +475,7 @@ def _check_game_resolution():
     scale_x, scale_y = screen.scaling_factors()
 
     if (w, h) == (screen.BASELINE_WIDTH, screen.BASELINE_HEIGHT):
-        logger.info(
-            f"当前窗口分辨率: {w}x{h} [正常], scale=({scale_x:.3f}, {scale_y:.3f})"
-        )
+        logger.info(f"当前窗口分辨率: {w}x{h} [正常], scale=({scale_x:.3f}, {scale_y:.3f})")
     else:
         logger.warning(
             f"当前窗口分辨率: {w}x{h}，scale=({scale_x:.3f}, {scale_y:.3f})。"
@@ -507,6 +515,7 @@ def agent(is_dev_mode=False):
             logger.info("开发模式：日志等级已设置为DEBUG")
 
         from maa.agent.agent_server import AgentServer
+        from maa.library import Library
         from maa.tasker import Tasker
 
         import custom
@@ -525,8 +534,14 @@ def agent(is_dev_mode=False):
         logger.debug(f"socket_id: {socket_id}")
 
         log_pi_environment()
+        logger.debug(
+            "Agent MaaFramework: %s, DLL: %s",
+            Library.version(),
+            Library.agent_server_libpath,
+        )
+        if not AgentServer.start_up(socket_id):
+            raise RuntimeError("AgentServer.start_up() failed")
         try:
-            AgentServer.start_up(socket_id)
             logger.info("AgentServer启动")
             _check_game_resolution()
             AgentServer.join()
