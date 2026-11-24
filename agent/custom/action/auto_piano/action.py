@@ -10,6 +10,7 @@ from maa.context import Context
 from maa.custom_action import CustomAction
 
 from utils.maafocus import PrintT
+from utils.logger import logger
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(PROJECT_ROOT) not in sys.path:
@@ -46,7 +47,7 @@ class AutoPlayPiano(CustomAction):
             return CustomAction.RunResult(success=False)
         except Exception as exc:
             PrintT(context, "auto_piano.failed", str(exc))
-            traceback.print_exc()
+            logger.error("Auto playback failed: %s", traceback.format_exc())
             return CustomAction.RunResult(success=False)
 
         return CustomAction.RunResult(success=True)
@@ -60,5 +61,6 @@ class AutoPlayPiano(CustomAction):
             key_mode=str(param.get("key_mode", "36")).strip(),
             tracks=str(param.get("tracks", "all")).strip(),
             out_of_range_mode=str(param.get("out_of_range_mode", "fold")).strip(),
+            instrument=str(param.get("instrument", "piano")).strip().lower(),
         )
         AutoPianoPlayer(PROJECT_ROOT).play(context, settings)

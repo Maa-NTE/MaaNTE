@@ -102,7 +102,7 @@ This software is open-sourced under [GNU Affero General Public License v3.0 only
   - 🛡️ Audio-based auto dodge/counter
 - 🎵 Auto Rhythm Game
   - 🥁 Loop play Mayoiuta
-- 🎹 Auto Piano
+- 🎹 Auto Play (Piano / Guitar)
   - 📂 Supports custom MIDI import
 - 📋 Task Presets
   - 💤 AFK / 🗺️ Real-time Assist

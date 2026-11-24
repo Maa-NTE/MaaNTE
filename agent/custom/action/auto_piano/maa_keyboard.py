@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 import ctypes
 import time
+from typing import TYPE_CHECKING
 
 from .key_mapping import NOTE_KEY_MAPPING
 from utils.logger import logger
+
+if TYPE_CHECKING:
+    from maa.controller import Controller
 
 user32 = ctypes.windll.user32
 WM_KEYDOWN = 0x0100
@@ -14,6 +20,23 @@ WA_CLICKACTIVE = 2
 WIN32_VK = {
     "shift": 0xA0,
     "ctrl": 0xA2,
+    "enter": 0x0D,
+    "0": 0x30,
+    "1": 0x31,
+    "2": 0x32,
+    "3": 0x33,
+    "4": 0x34,
+    "5": 0x35,
+    "6": 0x36,
+    "7": 0x37,
+    "8": 0x38,
+    "9": 0x39,
+    ";": 0xBA,
+    "=": 0xBB,
+    "-": 0xBD,
+    "[": 0xDB,
+    "]": 0xDD,
+    "'": 0xDE,
     "a": 0x41,
     "b": 0x42,
     "c": 0x43,
@@ -62,10 +85,18 @@ class MaaKeyboardBridge:
         self,
         hold_seconds: float = 0.008,
         mapping: dict | None = None,
+        controller: Controller | None = None,
     ):
         self.mapping = mapping if mapping is not None else NOTE_KEY_MAPPING
         self.hold_seconds = hold_seconds
+        self.controller = controller
         self.hwnd = 0
+
+        if self.controller is not None:
+            if not self.controller.connected:
+                raise RuntimeError("Maa keyboard controller is not connected.")
+            logger.info("自动演奏使用当前 Maa 控制器发送按键。")
+            return
 
         for title in WINDOW_TITLES:
             hwnd = user32.FindWindowW(None, title)
@@ -75,28 +106,33 @@ class MaaKeyboardBridge:
                 break
 
         if not self.hwnd:
-            logger.warning(
-                "未找到列表中的任何窗口，请检查游戏是否运行！列表: %s",
-                WINDOW_TITLES,
-            )
+            raise RuntimeError("Game window not found. Check that the game is running.")
 
     def _force_send_key(self, vk_code, is_down):
-        """通过 PostMessage 向游戏窗口发送按键。"""
-        if not self.hwnd:
+        """优先使用选定控制器；钢琴保留原有的 PostMessage 输入。"""
+        if self.controller is not None:
+            if is_down:
+                job = self.controller.post_key_down(vk_code)
+            else:
+                job = self.controller.post_key_up(vk_code)
+            if not job.wait().succeeded:
+                raise RuntimeError(
+                    "Maa keyboard %s failed (VK 0x%02X)."
+                    % ("key_down" if is_down else "key_up", vk_code)
+                )
             return
 
         lparam = get_lparam(vk_code, is_down)
         msg = WM_KEYDOWN if is_down else WM_KEYUP
-        user32.PostMessageW(self.hwnd, msg, vk_code, lparam)
+        if not user32.PostMessageW(self.hwnd, msg, vk_code, lparam):
+            raise ctypes.WinError()
 
     def _activate(self):
-        user32.SendMessageW(self.hwnd, WM_ACTIVATE, WA_CLICKACTIVE, 0)
+        if self.controller is None:
+            user32.SendMessageW(self.hwnd, WM_ACTIVATE, WA_CLICKACTIVE, 0)
 
     def execute_chord(self, midi_notes):
         """按修饰键类型隔离并短按一个和弦。"""
-        if not self.hwnd:
-            return
-
         self._activate()
         self._execute_chord_groups(midi_notes)
 
@@ -125,20 +161,31 @@ class MaaKeyboardBridge:
         if not keys:
             return
 
-        if modifier and modifier in WIN32_VK:
-            self._force_send_key(WIN32_VK[modifier], True)
-            time.sleep(0.002)
+        modifier_vk = WIN32_VK.get(modifier)
+        vk_codes = list(dict.fromkeys(WIN32_VK[key] for key in keys if key in WIN32_VK))
+        pressed = []
+        try:
+            if modifier_vk is not None:
+                self._force_send_key(modifier_vk, True)
+                pressed.append(modifier_vk)
+                time.sleep(0.002)
 
-        vk_codes = [WIN32_VK[key] for key in keys if key in WIN32_VK]
-        for vk in vk_codes:
-            self._force_send_key(vk, True)
+            for vk in vk_codes:
+                self._force_send_key(vk, True)
+                pressed.append(vk)
 
-        if self.hold_seconds > 0:
-            time.sleep(self.hold_seconds)
-
-        for vk in reversed(vk_codes):
-            self._force_send_key(vk, False)
-
-        if modifier and modifier in WIN32_VK:
-            time.sleep(0.001)
-            self._force_send_key(WIN32_VK[modifier], False)
+            if self.hold_seconds > 0:
+                time.sleep(self.hold_seconds)
+        finally:
+            release_error = None
+            for vk in reversed(pressed):
+                try:
+                    if vk == modifier_vk:
+                        time.sleep(0.001)
+                    self._force_send_key(vk, False)
+                except Exception as exc:
+                    logger.error("Failed to release playback key 0x%02X: %s", vk, exc)
+                    if release_error is None:
+                        release_error = exc
+            if release_error is not None:
+                raise release_error

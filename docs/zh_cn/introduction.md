@@ -78,8 +78,8 @@
 
 - 按住 F 极速拾取
 
-## 自动弹琴
+## 自动演奏
 
-详情见[自动弹琴](introduction\AutoPiano.md)
+详情见[自动演奏](introduction\AutoPiano.md)
 
-- 读取 MIDI 谱子自动演奏
+- 读取 MIDI 谱子自动演奏，支持钢琴／吉他模式

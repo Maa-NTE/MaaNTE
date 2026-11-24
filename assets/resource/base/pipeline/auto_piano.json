@@ -1,13 +1,68 @@
 {
-  "AutoPiano": {
-    "recognition": "DirectHit",
-    "action": "Custom",
-    "custom_action": "auto_play_piano",
-    "custom_action_param": {
-      "song": "songs/example.mid",
-      "speed": "1.0",
-      "transpose": "0"
+    "AutoPlay": {
+        "recognition": {
+            "type": "DirectHit",
+            "param": {}
+        },
+        "action": {
+            "type": "DoNothing",
+            "param": {}
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": [
+            "AutoPiano"
+        ]
     },
-    "next": []
-  }
+    "AutoPiano": {
+        "recognition": {
+            "type": "DirectHit",
+            "param": {}
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "auto_play_piano",
+                "custom_action_param": {
+                    "song": "songs/example.mid",
+                    "speed": "1.0",
+                    "transpose": "0",
+                    "key_mode": "36",
+                    "tracks": "all",
+                    "out_of_range_mode": "fold",
+                    "instrument": "piano"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": []
+    },
+    "AutoGuitar": {
+        "recognition": {
+            "type": "DirectHit",
+            "param": {}
+        },
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "auto_play_piano",
+                "custom_action_param": {
+                    "song": "songs/example.mid",
+                    "speed": "1.0",
+                    "transpose": "0",
+                    "key_mode": "36",
+                    "tracks": "all",
+                    "out_of_range_mode": "fold",
+                    "instrument": "guitar"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0,
+        "next": []
+    }
 }

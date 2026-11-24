@@ -100,10 +100,10 @@
             "label": "$group.HethereauHobbies.label",
             "default_expand": true
         },
-        { 
+        {
             "name": "WorldExplore",
             "label": "$group.WorldExplore.label",
-            "default_expand": true 
+            "default_expand": true
         },
         {
             "name": "RealTimeAssist",
@@ -151,7 +151,7 @@
         "resource/tasks/AutoFScroll.json",
         // group:others
         "resource/tasks/FountainCheckin.json",
-        "resource/tasks/AutoPiano.json",
+        "resource/tasks/AutoPlay.json",
         "resource/tasks/WitchDivination.json",
         // group:DatasetCollection
         "resource/tasks/AutonomousDrivingDataset.json",
