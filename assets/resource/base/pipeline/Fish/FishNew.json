@@ -9,19 +9,23 @@
         ]
     },
     "FishNewStart": {
-        "desc": "钓鱼功能主流程",
+        "desc": "钓鱼功能主流程，支持从结果界面接续",
         "anchor": "FishNewRestart",
         "recognition": {
-            "type": "And",
+            "type": "Or",
             "param": {
-                "all_of": [
-                    "FishSceneOnFishGame"
+                "any_of": [
+                    "FishSceneOnFishGame",
+                    "FishNewGameResult"
                 ]
             }
         },
         "pre_delay": 0,
         "post_delay": 0,
         "next": [
+            // 控条结束时可能先命中过渡画面，下一帧仍需检查结果和控条状态。
+            "FishNewGameResult",
+            "FishNewGaming",
             "FishNewCast",
             "FishNewOpenFishMaster"
         ]
@@ -31,6 +35,7 @@
         "action": "ClickKey",
         "key": [
             70 // F
+
         ],
         "recognition": {
             "type": "And",
@@ -62,6 +67,7 @@
         "action": "ClickKey",
         "key": [
             70 // F
+
         ],
         "next": [
             "FishNewGaming",
@@ -97,10 +103,10 @@
         },
         "pre_delay": 0,
         "next": [
+            "FishNewGaming",
             "FishNewGameResult",
             "FishNewEscapeResult",
-            "FishNewStart",
-            "FishNewGaming"
+            "FishNewStart"
         ],
         "on_error": [
             "[Anchor]FishNewErrorRestart"
@@ -134,6 +140,7 @@
         "action": "ClickKey",
         "key": [
             27 // Esc
+
         ],
         "next": [
             "[Anchor]FishNewRestart"
@@ -312,6 +319,7 @@
         "action": "ClickKey",
         "key": [
             27 // Esc
+
         ]
     },
     "FishNewBaitExit": {
@@ -337,6 +345,7 @@
         "action": "ClickKey",
         "key": [
             27 //ESC
+
         ],
         "focus": {
             "Node.Action.Succeeded": "未开启自动买鱼饵，尝试前往卖鱼"
@@ -521,7 +530,8 @@
     //         "[Anchor]FishNewErrorRestart"
     //     ]
     // },
-    "FishNewStoreManualScrollWait": { // 拉长以手动进行错误向下滚动后的上滚代码测试，缩短时间保留在正常流程中防止破坏结构，因为该节点完成后会继续检查，没找到就继续往上
+    "FishNewStoreManualScrollWait": {
+        // 拉长以手动进行错误向下滚动后的上滚代码测试，缩短时间保留在正常流程中防止破坏结构，因为该节点完成后会继续检查，没找到就继续往上
         "desc": "点击鱼饵后短暂等待，再执行点击复核",
         "recognition": {
             "type": "And",
@@ -786,6 +796,7 @@
             "param": {
                 "key": [
                     27 //Esc
+
                 ]
             }
         },
@@ -838,6 +849,7 @@
             "param": {
                 "key": [
                     27 //Esc
+
                 ]
             }
         },
@@ -857,6 +869,7 @@
         "action": "ClickKey",
         "key": [
             81 // Q
+
         ],
         "post_wait_freezes": 200,
         "next": [
@@ -1164,6 +1177,7 @@
         "action": "ClickKey",
         "key": [
             27 // Esc
+
         ],
         "next": [
             "[Anchor]FishNewRestart"
