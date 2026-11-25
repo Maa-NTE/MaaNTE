@@ -81,9 +81,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     module = load_coordinate_module()
     api_version = getattr(module, "API_VERSION", None)
-    if api_version != "1.3.0":
+    if api_version not in {"1.3.0", "1.4.0"}:
         print(
-            "coordinate core API 1.3.0 is required, got %s"
+            "coordinate core API 1.3.0 or 1.4.0 is required, got %s"
             % (api_version or "<unknown>")
         )
         return 1

@@ -1,5 +1,6 @@
 import json
 import math
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -214,6 +215,7 @@ class LocalRouteNavigation:
         if self._closed:
             raise RuntimeError("local route navigation is closed")
 
+        segment_started_at = time.time()
         self.runner.start()
         data, route_label = self._route_json_for_run(route_json)
         if data is None:
@@ -235,7 +237,9 @@ class LocalRouteNavigation:
             )
             return False
 
-        current_point = self.runner.update_current_frame()
+        current_point = self.runner.update_current_frame(since=segment_started_at)
+        if self.context.tasker.stopping:
+            return False
         self.route.reset(waypoints, True, current_point)
         logger.info(
             "OnlineMapNavigation local route loaded: path=%s route=%s segment=%s "
@@ -277,6 +281,7 @@ class LocalRouteNavigation:
             return json.load(file), route_path
 
 
+# MaaFramework 在进程内统一分配任务号，嵌套 run_task 的动作回调沿用外层任务号。
 _task_navigators: dict[int, LocalRouteNavigation] = {}
 
 

@@ -9,6 +9,8 @@ from .map_locator import MapLocator
 from .waypoint_navigator import WaypointNavigator
 from .route_model import RouteSession, SourceSize, Waypoint
 
+_ROUTE_START_POSITION_TIMEOUT = 1.0
+
 
 class RouteRunner:
     """按顺序执行可变路线会话中的路径点。"""
@@ -185,15 +187,28 @@ class RouteRunner:
                 provider.close()
             self._position_providers.clear()
 
-    def update_current_frame(self) -> Waypoint | None:
+    def update_current_frame(self, *, since: float | None = None) -> Waypoint | None:
         self.start()
         assert self.navigator is not None
-        result = self.navigator.update()
-        # 传送后首帧可能没有坐标。用上一段的缓存选最近路径点会跳过段首。
-        if result is None:
-            return None
-        location, _ = result
-        return location.point if location.found else None
+        provider = self.navigator.position_provider
+        assert provider is not None
+        deadline = time.monotonic()
+        if since is not None and not provider.uses_visual_positioning():
+            # 传送前采集的包可能延迟送达。起点选择和后续走位都只用本段的新包。
+            provider.sample_not_before = since
+            deadline += _ROUTE_START_POSITION_TIMEOUT
+
+        while not self.context.tasker.stopping:
+            result = self.navigator.update()
+            if result is not None:
+                location, _ = result
+                if location.found and location.point is not None:
+                    return location.point
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(self.navigator.frame_interval, remaining))
+        return None
 
     def source_size(self) -> SourceSize:
         navigator = self.navigator

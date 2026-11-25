@@ -19,7 +19,7 @@ from typing import Any
 
 __all__ = ("API_VERSION", "CoordinateCapture")
 
-API_VERSION = "1.3.0"
+API_VERSION = "1.4.0"
 _Vector3 = tuple[float, float, float]
 _Pose = tuple[float, float, float, float, float]
 _Flow = tuple[str, int, str, int, str]
@@ -593,14 +593,20 @@ class CoordinateCapture:
                     type(callback_error).__name__ if callback_error is not None else ""
                 ),
             }
-    def read(self, max_age: float = 1.0) -> _Pose | None:
+
+    def read(self, max_age: float = 1.0, *, since: float = 0.0) -> _Pose | None:
         """Return (x, y, z, raw_pitch, compass_heading).
 
         ``compass_heading`` is mapped to the navigation frame with north at
         0 degrees and normalized to the half-open range [0, 360).
+        ``since`` is the earliest acceptable packet capture time in Unix seconds.
         """
         with self._lock:
-            if self._sample is None or time.time() - self._last_sample_wall > max_age:
+            if (
+                self._sample is None
+                or self._sample_at < since
+                or time.time() - self._last_sample_wall > max_age
+            ):
                 return None
             return self._sample
 

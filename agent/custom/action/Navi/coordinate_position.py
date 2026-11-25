@@ -16,7 +16,7 @@ _RawPose = tuple[float, float, float, float, float]
 _MapPoint = tuple[int, int]
 COORDINATE_MAP_SIZE = (11264, 11264)
 _CORE_MODULE = ".nte_coordinate_api"
-_API_VERSION = "1.3.0"
+_API_VERSION = "1.4.0"
 _COORDINATE_SAMPLE_MAX_AGE = 1.0
 
 # BEGIN GENERATED NAVI COORDINATE TRANSFORM
@@ -32,7 +32,7 @@ _CALIBRATION_ERROR = 0.22031967781665318
 class _CoordinateCapture(Protocol):
     def start(self) -> None: ...
 
-    def read(self, max_age: float = 1.0) -> _RawPose | None: ...
+    def read(self, max_age: float = 1.0, *, since: float = 0.0) -> _RawPose | None: ...
 
     def stats(self) -> dict[str, Any]: ...
 
@@ -159,6 +159,7 @@ class CoordinatePositionProvider:
         self._capture: _CoordinateCapture | None = None
         self._capture_backend: str | None = None
         self._coordinate_active = False
+        self.sample_not_before = 0.0
         self.debug = bool(debug)
         self._last_map_point: _MapPoint | None = None
         self._last_raw_coordinate: _RawPoint | None = None
@@ -223,7 +224,9 @@ class CoordinatePositionProvider:
                 result.raw_coordinate = _raw_xy_from_map(result.point)
             return result
 
-        pose = capture.read(max_age=_COORDINATE_SAMPLE_MAX_AGE)
+        pose = capture.read(
+            max_age=_COORDINATE_SAMPLE_MAX_AGE, since=self.sample_not_before
+        )
         if pose is None:
             if debug:
                 logger.debug(

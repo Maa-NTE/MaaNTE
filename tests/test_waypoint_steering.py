@@ -87,6 +87,7 @@ class WaypointSteeringTest(unittest.TestCase):
         self.addCleanup(self.navigator.close)
         self.controller = self.navigator.controller
         self.forward = []
+        self.turns_per_frame = []
         self.navigator.sleep_remaining = Mock()
         self.navigator.sleep_interruptible = self.record_forward
         self.navigator.set_jump_enabled(True)
@@ -94,7 +95,17 @@ class WaypointSteeringTest(unittest.TestCase):
 
     def record_forward(self, duration):
         self.forward.append(self.navigator.w_down)
+        mouse = self.controller.post_relative_move
+        self.turns_per_frame.append([command.args for command in mouse.call_args_list])
+        mouse.reset_mock()
         return True
+
+    def assert_horizontal_turn(self, frame, direction):
+        commands = self.turns_per_frame[frame]
+        self.assertEqual(len(commands), 1, f"frame {frame}: {commands}")
+        dx, dy = commands[0]
+        self.assertGreater(dx * direction, 0, f"frame {frame}: dx={dx}")
+        self.assertEqual(dy, 0)
 
     def replay_approach(self, target, samples, *, jump_when_stuck=True):
         samples = iter(samples)
@@ -129,8 +140,9 @@ class WaypointSteeringTest(unittest.TestCase):
             self.controller.post_key_up.call_args_list, [call(87), call(87)]
         )
         self.assertNotIn(call(32), self.controller.post_key_down.call_args_list)
-        turns = self.controller.post_relative_move.call_args_list
-        self.assertTrue(any(turn.args[0] < 0 for turn in turns))
+        self.assert_horizontal_turn(0, direction=1)
+        self.assert_horizontal_turn(1, direction=-1)
+        self.assertEqual(self.turns_per_frame[2], [])
 
     def test_periodic_jump_remains_available_on_a_long_aligned_leg(self):
         self.navigator.update = Mock(
@@ -148,12 +160,13 @@ class WaypointSteeringTest(unittest.TestCase):
     def test_visual_arrow_can_turn_with_forward_movement(self):
         self.navigator.update = Mock(
             side_effect=[
-                pose((0, 0), 270.0, network=False),
+                pose((0, 0), 20.0, network=False),
                 pose((19, 0), 90.0, network=False),
             ]
         )
         self.assertTrue(self.navigator.move_to((20, 0)))
         self.assertEqual(self.forward, [True])
+        self.assert_horizontal_turn(0, direction=1)
 
     def test_network_turn_resumes_forward_after_alignment(self):
         self.navigator.set_jump_enabled(False)

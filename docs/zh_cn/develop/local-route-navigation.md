@@ -239,6 +239,8 @@ navigator.close()
 
 执行时会先把路线点转换到当前 `MapLocator` 的地图尺寸，再从当前位置附近的路径点开始跑。每到达一个点，`RouteSession` 推进到下一个点，直到所有点完成。
 
+网络定位会用本段开始后采集的第一份有效坐标选择最近路径点。等待 1 秒仍无有效坐标时，从段首开始，收到本段的有效坐标后才会走位。传送前采集、传送后才送达的坐标也会被忽略。
+
 转向 PID 根据实测相机转速和两帧之间的时间修正方向。夹角进入 4° 以内时停止转向，超过 6° 再次修正。使用网络定位时，超过 35° 会松开前进键原地转身，转到 25° 以内再继续走。
 
 开启周期跳跃后，角色朝向目标且距到达范围超过 12 个地图像素时才会按周期起跳。捡钱包还会在接近路点、方向已对准且持续前进 2 秒仍停留在 2 像素范围内时补跳一次。每个路点独立判断。
@@ -246,7 +248,7 @@ navigator.close()
 ## 注意事项
 
 - `tolerance` 太小会导致角色在目标点附近反复调整；地图定位误差较大时应适当增大。
-- `position_backend=coordinate` 依赖网络抓包后端。启动时优先使用 Scapy + libpcap（Npcap/WinPcap），不可用时尝试 `pktmon-interface`；pktmon 后端通常需要以管理员权限运行。两者都不可用则失败；`auto` 模式在两种网络后端都启动失败时回退完整视觉方案。网络定位成功启用后，位置与摄像机朝向均使用 1.2 核心 `read()` 的网络数据，不再初始化小地图视觉定位或 `AnglePredictor`，也不会为这两项功能额外截图。Navi 以 `CoordinateCapture(refresh_rate=0, capture_backend=...)` 启动核心，不限制样本发布刷新率，并以 60 Hz 运行导航控制循环。网络样本暂时中断时位置状态为 `coordinate_stale`，不会回退视觉。
+- `position_backend=coordinate` 依赖网络抓包后端。启动时优先使用 Scapy + libpcap（Npcap/WinPcap），不可用时尝试 `pktmon-interface`；pktmon 后端通常需要以管理员权限运行。两者都不可用则失败；`auto` 模式在两种网络后端都启动失败时回退完整视觉方案。网络定位成功启用后，位置与摄像机朝向取自坐标核心 `read()` 返回的同一份样本，不再初始化小地图视觉定位或 `AnglePredictor`，也不会为这两项功能额外截图。Navi 以 `CoordinateCapture(refresh_rate=0, capture_backend=...)` 启动核心，不限制样本发布刷新率，并以 60 Hz 运行导航控制循环。网络样本暂时中断时位置状态为 `coordinate_stale`，不会回退视觉。
 - WebSocket 位置统一使用游戏原始坐标。网络定位发送 `x/y/z`，并通过顶层 `angle`、`pitch` 发送映射后的水平摄像机角和原始俯仰角；视觉定位通过标定逆变换发送 `x/y`，不发送无法可靠推导的高度 `z` 或俯仰角。网络样本短暂中断时会保留最后一次位置用于地图展示，但该位置不会被导航逻辑视为有效实时位置。
 - `config/navi_coordinate_calibration.json` 仅用于本地调试计算，不会在运行时读取。修改标定点后执行 `python scripts/update_navi_coordinate_transform.py`，脚本会计算最佳变换并更新 `coordinate_position.py` 中的常量。
 - 需要手动标定时，可把该文件改为标定点格式。开启 `debug=true` 从 `Navi coordinate position/validation` 日志读取 `raw` 网络坐标，并在地图上取得对应的 11264×11264 像素坐标。至少填写 3 个相距较远且不共线的点：
@@ -272,6 +274,6 @@ navigator.close()
 ```
 
 每个点可填写 `map: [pixelX, pixelY]`，也可直接填写在线地图坐标 `world: [lat, lng]`。启动时会自动选择原始三维坐标中的运动平面并拟合旋转、缩放和平移。建议使用 4～8 个覆盖路线区域的点；日志中的 `error` 是拟合后的地图像素均方根误差。
-- 坐标抓取核心源码位于 `agent/custom/action/Navi/nte_coordinate_api.py`，直接随 MaaNTE 安装包发布，不再依赖第三方仓库或 `.pyd` 文件。模块公开 `CoordinateCapture` 类及其 `start()`、`read(max_age=1.0)`、`close()` 方法。`CoordinateCapture(refresh_rate=30.0, capture_backend="pcap")` 可设置每秒发布的最大样本数和抓包后端，`capture_backend` 支持 `"pcap"` / `"scapy"` 和 `"pktmon"`，`refresh_rate` 设为 `0` 时不限速。1.3 起 `read()` 返回同一数据包解析出的 `(x, y, z, pitch, heading)` 或 `None`，其中 `pitch` 为原始俯仰角，`heading` 为映射后的水平摄像机罗盘角（正北为 `0°`，范围 `[0, 360)`）；该返回值不兼容旧版三元坐标。
+- 坐标抓取核心源码位于 `agent/custom/action/Navi/nte_coordinate_api.py`，直接随 MaaNTE 安装包发布，不再依赖第三方仓库或 `.pyd` 文件。模块公开 `CoordinateCapture` 类及其 `start()`、`read(max_age=1.0)`、`close()` 方法。`CoordinateCapture(refresh_rate=30.0, capture_backend="pcap")` 可设置每秒发布的最大样本数和抓包后端，`capture_backend` 支持 `"pcap"` / `"scapy"` 和 `"pktmon"`，`refresh_rate` 设为 `0` 时不限速。1.3 起 `read()` 返回同一数据包解析出的 `(x, y, z, pitch, heading)` 或 `None`，其中 `pitch` 为原始俯仰角，`heading` 为映射后的水平摄像机罗盘角（正北为 `0°`，范围 `[0, 360)`）。更早版本返回三元坐标。1.4 起可以传入关键字参数 `since`，按 Unix 时间戳（秒）过滤更早采集的样本。
 - `debug=true` 会打开 OpenCV 调试窗口，只用于本地调试。
 - 路线执行依赖实时截图、地图定位和方向模型，不能在没有 Maa `Context` 和控制器的普通单元测试里完整运行。
