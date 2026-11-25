@@ -22,6 +22,7 @@
         },
         "pre_delay": 0,
         "post_delay": 0,
+        "rate_limit": 0,
         "next": [
             // 控条结束时可能先命中过渡画面，下一帧仍需检查结果和控条状态。
             "FishNewGameResult",
@@ -102,6 +103,8 @@
             "lost_abort_ms": 1500
         },
         "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 0,
         "next": [
             "FishNewGaming",
             "FishNewGameResult",
@@ -114,34 +117,47 @@
     },
     "FishNewGameResult": {
         "desc": "检查钓鱼结果，并且关闭",
-        "recognition": "OCR",
-        "roi": [
-            440,
-            625,
-            400,
-            55
-        ],
-        "expected": [
-            "点击空白区域关闭",
-            "點擊空白區域關閉",
-            "(?i)Press\\s*empty\\s*area\\s*to\\s*close",
-            "空白を押して閉じる",
-            "关闭",
-            "關閉",
-            "(?i)Close",
-            "閉じる",
-            "빈 곳을 터치해 닫기",
-            "获得的鱼经验",
-            "獲得的魚經驗",
-            "(?i)Fishing\\s*experience\\s*gained",
-            "釣り経験値を獲得",
-            "낚시 경험치 획득"
-        ],
-        "action": "ClickKey",
-        "key": [
-            27 // Esc
+        "recognition": {
+            "type": "OCR",
+            "param": {
+                "roi": [
+                    440,
+                    625,
+                    400,
+                    55
+                ],
+                "expected": [
+                    "点击空白区域关闭",
+                    "點擊空白區域關閉",
+                    "(?i)Press\\s*empty\\s*area\\s*to\\s*close",
+                    "空白を押して閉じる",
+                    "关闭",
+                    "關閉",
+                    "(?i)Close",
+                    "閉じる",
+                    "빈 곳을 터치해 닫기",
+                    "获得的鱼经验",
+                    "獲得的魚經驗",
+                    "(?i)Fishing\\s*experience\\s*gained",
+                    "釣り経験値を獲得",
+                    "낚시 경험치 획득"
+                ],
+                // 提示为固定单行，直接识别可跳过检测，也不会被全屏逃鱼 OCR 的批处理阻塞。
+                "only_rec": true
+            }
+        },
+        "action": {
+            "type": "ClickKey",
+            "param": {
+                "key": [
+                    27 // Esc
 
-        ],
+                ]
+            }
+        },
+        "pre_delay": 0,
+        "post_delay": 0,
+        "rate_limit": 0,
         "next": [
             "[Anchor]FishNewRestart"
         ],
