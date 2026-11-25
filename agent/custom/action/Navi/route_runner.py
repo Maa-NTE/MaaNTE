@@ -101,6 +101,7 @@ class RouteRunner:
         *,
         on_tick: Callable[[], None] | None = None,
         stop_when_route_done: bool = False,
+        jump_when_stuck: bool = False,
     ) -> str:
         self.start()
         assert self.navigator is not None
@@ -133,8 +134,7 @@ class RouteRunner:
                     self.route.status = "arrived"
                 continue
 
-            # 根据路径点位置决定是否允许跳跃。
-            # 为了防止接近目标点时因跳跃产生惯性冲过头，最后两个路径点强制关闭跳跃。
+            # 关闭末段的周期跳跃，让角色正常走到拾取位置。
             if self.periodic_jump:
                 total = len(waypoints)
                 if total > 3:
@@ -149,7 +149,7 @@ class RouteRunner:
             with self._lock:
                 self._moving_target = (current_index, target)
             try:
-                arrived = self.navigator.move_to(target)
+                arrived = self.navigator.move_to(target, jump_when_stuck=jump_when_stuck)
             except Exception:
                 self.navigator.release()
                 raise

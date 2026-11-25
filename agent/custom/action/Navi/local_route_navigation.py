@@ -132,7 +132,7 @@ class LocalRouteNavigation:
         max_duration: 单个路径点的最长寻路时间（秒），默认 None 即不限时，
             与原行为一致；必须是有限的正常数。
         periodic_jump: 是否在寻路途中周期性跳跃（每 3 秒一次），默认 False，
-            与原行为一致；路径点少于 4 个时全程不跳，且永远不跳最后两个点。
+            路径点少于 4 个或位于最后两个点时停用周期跳跃。
 
     Pipeline 写法（可选参数不填即保持原行为）：
         "LocalRouteNavigationDemo": {
@@ -208,7 +208,9 @@ class LocalRouteNavigation:
         *,
         route_name: str = "",
         segment_index: int = 1,
+        jump_when_stuck: bool = False,
     ) -> bool:
+        """执行路线段。jump_when_stuck 允许在坐标定位确认近距离卡住时补跳一次。"""
         if self._closed:
             raise RuntimeError("local route navigation is closed")
 
@@ -245,7 +247,9 @@ class LocalRouteNavigation:
             current_point,
             self.route.payload()["currentIndex"],
         )
-        status = self.runner.run_until_stopped(stop_when_route_done=True)
+        status = self.runner.run_until_stopped(
+            stop_when_route_done=True, jump_when_stuck=jump_when_stuck
+        )
         return status == "arrived"
 
     def close(self) -> None:

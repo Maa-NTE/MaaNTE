@@ -23,6 +23,7 @@ OCR_ROI = (734, 263, 316, 254)                  # 拾取提示文字的 ROI（12
 POSITIVES = ["团三郎", "咕比", "劲爽", "再来一口", "馈赠", "一箱", "猎人", "心猎骑士"]   # 正期望词表
 NEGATIVES = ["售货机", "坐下", "驾驶", "乘坐", "搭乘", "安魂曲"]                    # 负期望词表
 OCR_THRESHOLD = 0.5                              # OCR 命中阈值
+OCR_SLOW_SECONDS = 2.0                           # 超过此耗时记录单帧识别延迟
 
 # 拾取节奏
 PRESS_DELAY = 0.5               # F 键模式下，相邻两次按 F 之间的间隔
@@ -277,40 +278,33 @@ def _restore_world_ui(context: Context) -> bool:
 # ============================================================
 # OCR
 # ============================================================
-def _ocr_raw(context: Context, frame, expected: list[str]):
-    """执行一次 OCR 识别。
-
-    这里不再吞掉异常：识别失败必须让上层感知，否则会被当成「没有目标」而跳过
-    拾取，任务最后还会报成功。
-    """
-    return context.run_recognition_direct(
+def _read_pickup_prompts(
+    context: Context, frame
+) -> tuple[bool, list[tuple[int, int, int, int]]]:
+    """从同一帧读出其他交互提示和可拾取目标的点击框。"""
+    started = time.monotonic()
+    detail = context.run_recognition_direct(
         JRecognitionType.OCR,
-        JOCR(expected=list(expected), roi=tuple(OCR_ROI), threshold=OCR_THRESHOLD),
+        JOCR(expected=POSITIVES + NEGATIVES, roi=OCR_ROI, threshold=OCR_THRESHOLD),
         frame,
     )
+    elapsed = time.monotonic() - started
+    if elapsed >= OCR_SLOW_SECONDS:
+        logger.warning("[PickWallet] 拾取提示单帧 OCR 耗时 %.2f 秒", elapsed)
+    if detail is None or not detail.hit:
+        return False, []
 
-
-def _ocr_hit(context: Context, frame, expected: list[str]) -> bool:
-    detail = _ocr_raw(context, frame, expected)
-    return bool(detail is not None and getattr(detail, "hit", False))
-
-
-def _ocr_all_hits(context: Context, frame, expected: list[str]) -> list[dict]:
-    detail = _ocr_raw(context, frame, expected)
-    if detail is None or not getattr(detail, "hit", False):
-        return []
-    hits = []
-    seen = set()
-    for item in (getattr(detail, "filtered_results", None) or []):
+    has_negative = False
+    boxes = []
+    for item in detail.filtered_results or []:
         text = getattr(item, "text", "") or ""
-        if not any(p in text for p in expected):
-            continue
-        box = _box_to_xywh(getattr(item, "box", None))
-        if box is None or box in seen:
-            continue
-        seen.add(box)
-        hits.append({"box": box, "text": text})
-    return hits
+        if any(word in text for word in NEGATIVES):
+            has_negative = True
+        if any(word in text for word in POSITIVES):
+            box = _box_to_xywh(getattr(item, "box", None))
+            if box is not None and box not in boxes:
+                boxes.append(box)
+    return has_negative, boxes
 
 
 # ============================================================
@@ -333,7 +327,7 @@ def _press_f(context: Context) -> None:
     _press_key(context, VK_F)
 
 
-def _alt_click_box(context: Context, box: list[int]) -> None:
+def _alt_click_box(context: Context, box: tuple[int, int, int, int]) -> None:
     context.run_action("__AltClickAltKeyDownAction")
     try:
         context.run_action(
@@ -356,36 +350,38 @@ def _do_pick_round(context: Context, round_name: str) -> bool:
     frame = _screencap(context)
     if frame is None:
         return False
-    has_negative = _ocr_hit(context, frame, NEGATIVES)
-    pos_hits = _ocr_all_hits(context, frame, POSITIVES)
+    has_negative, boxes = _read_pickup_prompts(context, frame)
 
     logger.info(
-        "%s识别，正期望%s个，负期望%s个", round_name, len(pos_hits), int(has_negative)
+        "%s识别，正期望%s个，负期望%s个", round_name, len(boxes), int(has_negative)
     )
 
-    if not pos_hits:
+    if not boxes:
         logger.info("无正期望，该点位结束")
         return False
 
     if has_negative:
         logger.info("alt_click模式，依次点击拾取")
-        target_count = len(pos_hits)
-        for _ in range(target_count):
+        for _ in range(len(boxes)):
             if context.tasker.stopping:
                 return False
             frame = _screencap(context)
             if frame is None:
                 break
-            hits = _ocr_all_hits(context, frame, POSITIVES)
-            if not hits:
+            _, current_boxes = _read_pickup_prompts(context, frame)
+            if not current_boxes:
                 logger.info("未识别到正期望，提前结束 alt_click")
                 break
-            _alt_click_box(context, hits[0]["box"])
+            if context.tasker.stopping:
+                return False
+            _alt_click_box(context, current_boxes[0])
             time.sleep(WAIT_AFTER_ALT_CLICK)
         return False
 
-    logger.info("F键模式，按下%s次", len(pos_hits))
-    for _ in range(len(pos_hits)):
+    logger.info("F键模式，按下%s次", len(boxes))
+    for _ in range(len(boxes)):
+        if context.tasker.stopping:
+            return False
         _press_f(context)
         time.sleep(PRESS_DELAY)
     return True
@@ -602,7 +598,7 @@ class PickWalletRunAll(CustomAction):
                 # ---------- 寻路 ----------
                 try:
                     navigate_ok = navigator.run_route(
-                        route_name=route_name, segment_index=p_idx
+                        route_name=route_name, segment_index=p_idx, jump_when_stuck=True
                     )
                 except Exception:
                     # 寻路异常不能当成普通超时继续跳点，否则路线不完整还会报成功
