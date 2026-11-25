@@ -88,6 +88,12 @@ def _enrich_record(record) -> bool:
     return True
 
 
+def _filter_console_record(record) -> bool:
+    if record["extra"].get("file_only", False):
+        return False
+    return _enrich_record(record)
+
+
 _HAS_LOGURU = False
 _loguru_logger: Any = None
 
@@ -115,9 +121,14 @@ class _InterceptHandler(logging.Handler):
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
-        _loguru_logger.opt(depth=depth, exception=record.exc_info).log(
-            level, record.getMessage()
-        )
+        _loguru_logger.bind(file_only=getattr(record, "file_only", False)).opt(
+            depth=depth, exception=record.exc_info
+        ).log(level, record.getMessage())
+
+
+class _ConsoleFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not getattr(record, "file_only", False)
 
 
 class _ConsoleFormatter(logging.Formatter):
@@ -167,7 +178,7 @@ def _setup_loguru_logger(log_dir="debug/custom", console_level="INFO"):
         format=_resolve_console_format(),
         colorize=False,
         level=console_level,
-        filter=_enrich_record,
+        filter=_filter_console_record,
     )
     _loguru_logger.add(
         f"{log_dir}/{{time:YYYY-MM-DD}}.log",
@@ -201,6 +212,7 @@ def _setup_std_logger(log_dir="debug/custom", console_level="INFO"):
 
     console_handler = logging.StreamHandler(_resolve_console_stream())
     console_handler.setLevel(_resolve_level(console_level))
+    console_handler.addFilter(_ConsoleFilter())
     console_handler.setFormatter(_ConsoleFormatter())
     _ROOT_LOGGER.addHandler(console_handler)
 

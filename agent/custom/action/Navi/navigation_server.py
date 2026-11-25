@@ -1,6 +1,8 @@
 import asyncio
 import inspect
 import json
+import socket
+import sys
 import threading
 import time
 import logging
@@ -16,6 +18,12 @@ get_logger("websockets").setLevel(logging.WARNING)
 get_logger("websockets.server").setLevel(logging.WARNING)
 get_logger("websockets.client").setLevel(logging.WARNING)
 get_logger("websockets.protocol").setLevel(logging.WARNING)
+
+
+class NavigationPortUnavailableError(RuntimeError):
+    def __init__(self, port: int) -> None:
+        self.port = port
+        super().__init__("Navigation WebSocket port %s is unavailable" % port)
 
 
 class NavigationWebSocketServer:
@@ -53,9 +61,7 @@ class NavigationWebSocketServer:
         with self._start_lock:
             if self._started:
                 if self._start_error is not None:
-                    raise RuntimeError(
-                        "Navigation WebSocket failed to start"
-                    ) from self._start_error
+                    raise self._start_error
                 return
             self._started = True
             self._ready_event.clear()
@@ -76,11 +82,9 @@ class NavigationWebSocketServer:
                     f"ws://{self._host}:{self._port}"
                 )
             if self._start_error is not None:
+                error = self._start_error
                 self.stop()
-                raise RuntimeError(
-                    f"Navigation WebSocket failed to start: "
-                    f"ws://{self._host}:{self._port}"
-                ) from self._start_error
+                raise error
 
     def stop(self, timeout: float = 3.0) -> None:
         with self._start_lock:
@@ -106,7 +110,13 @@ class NavigationWebSocketServer:
             self._loop = None
             self._server = None
             self._clients.clear()
-        logger.info(f"Navigation WebSocket stopped: ws://{self._host}:{self._port}")
+        if self._start_error is None:
+            logger.debug(
+                "Navigation WebSocket stopped: ws://%s:%s",
+                self._host,
+                self._port,
+                extra={"file_only": True},
+            )
 
     def publish_state(
         self,
@@ -261,7 +271,11 @@ class NavigationWebSocketServer:
             self._start_error = RuntimeError(
                 "Navigation WebSocket is unavailable. Install requirements.txt and retry."
             )
-            logger.error(str(self._start_error))
+            logger.debug(
+                "Navigation WebSocket dependency unavailable",
+                exc_info=True,
+                extra={"file_only": True},
+            )
             self._ready_event.set()
             return
 
@@ -270,7 +284,26 @@ class NavigationWebSocketServer:
         asyncio.set_event_loop(loop)
 
         async def start_server():
-            return await serve(self._handle_client, self._host, self._port)
+            listen_socket: socket.socket | None = None
+            try:
+                if sys.platform == "win32":
+                    listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    # Windows can otherwise share a wildcard bind with an existing
+                    # loopback listener, sending map clients to the wrong service.
+                    listen_socket.setsockopt(
+                        socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1
+                    )
+                    listen_socket.bind((self._host, self._port))
+                    return await serve(self._handle_client, sock=listen_socket)
+                return await serve(self._handle_client, self._host, self._port)
+            except OSError as exc:
+                if listen_socket is not None:
+                    listen_socket.close()
+                raise NavigationPortUnavailableError(self._port) from exc
+            except BaseException:
+                if listen_socket is not None:
+                    listen_socket.close()
+                raise
 
         try:
             self._server = loop.run_until_complete(start_server())
@@ -278,7 +311,11 @@ class NavigationWebSocketServer:
             loop.run_forever()
         except Exception as exc:
             self._start_error = exc
-            logger.error(f"Navigation WebSocket failed to start: {exc}")
+            logger.debug(
+                "Navigation WebSocket failed to start",
+                exc_info=True,
+                extra={"file_only": True},
+            )
             self._ready_event.set()
         finally:
             if self._server is not None:

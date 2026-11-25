@@ -108,5 +108,10 @@
     "bidking.failed": "[BidKing] Bidding failed (%s)",
     "volleyball_weekly.started": "[Volleyball Weekly] Task started",
     "volleyball_weekly.playing": "[Volleyball Weekly] Match in progress",
-    "volleyball_weekly.teammates_selected": "[Volleyball Weekly] Teammates selected"
+    "volleyball_weekly.teammates_selected": "[Volleyball Weekly] Teammates selected",
+    "navi.started": "Live map positioning has started on port %s. Enable live positioning on the map page and connect using the same port.",
+    "navi.network_positioning_active": "Network positioning is active. Your character's coordinates are being sent to the online map.",
+    "navi.port_unavailable": "Live map positioning could not start: port %s is unavailable and may be used by another program. Change the port in both the task settings and map settings to the same unused port (for example, 14515), then restart the task.",
+    "navi.invalid_settings": "The live map positioning settings are invalid. Check the port, arrival tolerance, and sampling interval.",
+    "navi.failed": "Live map positioning failed. Please include the logs when reporting the problem."
 }

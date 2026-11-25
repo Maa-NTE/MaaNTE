@@ -108,5 +108,10 @@
     "bidking.failed": "[拍賣之王] 出價失敗（%s）",
     "volleyball_weekly.started": "[自動排球（週常）] 任務開始",
     "volleyball_weekly.playing": "[自動排球（週常）] 比賽進行中",
-    "volleyball_weekly.teammates_selected": "[自動排球（週常）] 隊友選擇完成"
+    "volleyball_weekly.teammates_selected": "[自動排球（週常）] 隊友選擇完成",
+    "navi.started": "線上地圖定位已啟動（連接埠 %s）。請在地圖頁面開啟即時定位，並使用相同連接埠連線。",
+    "navi.network_positioning_active": "已啟用網路定位，正在向線上地圖同步角色座標。",
+    "navi.port_unavailable": "線上地圖定位啟動失敗：連接埠 %s 無法使用，可能已被其他程式占用。請將任務設定和地圖設定中的連接埠都改為同一個可用連接埠（例如 14515），然後重新啟動任務。",
+    "navi.invalid_settings": "線上地圖定位設定有誤，請檢查連接埠、到達容差和取樣間隔。",
+    "navi.failed": "線上地圖定位執行失敗，請附上日誌回報問題。"
 }

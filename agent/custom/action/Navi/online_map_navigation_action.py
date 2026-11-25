@@ -4,7 +4,10 @@ from maa.agent.agent_server import AgentServer
 from maa.context import Context
 from maa.custom_action import CustomAction
 
+from utils.maafocus import PrintT
+
 from ..Common.logger import get_logger
+from .navigation_server import NavigationPortUnavailableError
 from .route_websocket_service import RouteWebSocketService
 from .route_runner import RouteRunner
 from .route_model import RouteSession
@@ -26,7 +29,13 @@ class OnlineMapNavigationAction(CustomAction):
             position_backend = str(params.get("position_backend", "auto"))
             debug = bool(params.get("debug", False))
         except ValueError as exc:
-            logger.error("OnlineMapNavigation param invalid: %s", exc)
+            logger.debug(
+                "OnlineMapNavigation param invalid: %s",
+                exc,
+                exc_info=True,
+                extra={"file_only": True},
+            )
+            PrintT(context, "navi.invalid_settings")
             return CustomAction.RunResult(success=False)
 
         route = RouteSession()
@@ -50,13 +59,25 @@ class OnlineMapNavigationAction(CustomAction):
         try:
             network.start()
             runner.start()
-            logger.info(
-                "OnlineMapNavigation service started: ws://0.0.0.0:%s", port
+            logger.debug(
+                "OnlineMapNavigation service started: ws://0.0.0.0:%s",
+                port,
+                extra={"file_only": True},
             )
+            PrintT(context, "navi.started", port)
             runner.run_until_stopped(on_tick=network.publish_route)
             return CustomAction.RunResult(success=False)
+        except NavigationPortUnavailableError as exc:
+            PrintT(context, "navi.port_unavailable", exc.port)
+            return CustomAction.RunResult(success=False)
         except Exception as exc:
-            logger.error("OnlineMapNavigation failed: %s", exc)
+            logger.debug(
+                "OnlineMapNavigation failed: %s",
+                exc,
+                exc_info=True,
+                extra={"file_only": True},
+            )
+            PrintT(context, "navi.failed")
             return CustomAction.RunResult(success=False)
         finally:
             runner.close()

@@ -201,12 +201,13 @@ class CoordinatePositionProvider:
             )
             return
 
-        logger.info(
+        logger.debug(
             "Navi coordinate capture started: backend=%s axes=%s scale=%.9f error=%.2f",
             self._capture_backend,
             _COORDINATE_TRANSFORM.axes,
             math.hypot(_COORDINATE_TRANSFORM.a, _COORDINATE_TRANSFORM.b),
             _COORDINATE_TRANSFORM.error,
+            extra={"file_only": True},
         )
 
     def locate(self, locator: Any, frame: Any) -> MapLocationResult:
@@ -273,7 +274,11 @@ class CoordinatePositionProvider:
             )
 
         if not self._coordinate_active:
-            logger.info("Navi position source switched to coordinate-only")
+            logger.debug(
+                "Navi network positioning active: backend=%s",
+                self._capture_backend,
+                extra={"file_only": True},
+            )
             self._coordinate_active = True
         self._last_map_point = point
         self._last_raw_coordinate = raw

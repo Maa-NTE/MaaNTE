@@ -6,6 +6,8 @@ from typing import Any, Callable
 
 from maa.context import Context
 
+from utils.maafocus import PrintT
+
 from ..Common.logger import get_logger
 from .angle_predictor import AnglePredictionResult, AnglePredictor
 from .coordinate_position import CoordinatePositionProvider
@@ -129,6 +131,7 @@ class WaypointNavigator:
         self.locator: MapLocator | None = None
         self.position_provider: CoordinatePositionProvider | None = None
         self.predictor: AnglePredictor | None = None
+        self._network_position_reported = False
         try:
             self.position_provider = CoordinatePositionProvider(
                 position_backend,
@@ -143,9 +146,10 @@ class WaypointNavigator:
                 )
             else:
                 self.frame_interval = _NETWORK_FRAME_INTERVAL
-                logger.info(
+                logger.debug(
                     "Navi network pose active: visual angle predictor disabled, "
-                    "control_rate=60Hz"
+                    "control_rate=60Hz",
+                    extra={"file_only": True},
                 )
         except Exception:
             self.close()
@@ -212,6 +216,9 @@ class WaypointNavigator:
             angle = self.predictor.predict(frame)
         else:
             location = self.position_provider.locate(None, None)
+            if location.found and not self._network_position_reported:
+                PrintT(self.context, "navi.network_positioning_active")
+                self._network_position_reported = True
             angle = AnglePredictionResult(
                 found=location.found and location.camera_heading is not None,
                 angle=location.camera_heading,
@@ -339,10 +346,7 @@ class WaypointNavigator:
 
     def press_forward(self) -> None:
         now = time.monotonic()
-        if (
-            self.w_down
-            and now - self._last_w_down_at < self.key_refresh_interval
-        ):
+        if self.w_down and now - self._last_w_down_at < self.key_refresh_interval:
             return
         self.controller.post_key_down(_KEY_W).wait()
         self.w_down = True

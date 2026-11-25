@@ -19,6 +19,7 @@ DefaultLang = LangZhCN
 _messages: dict[str, str] = {}
 _current_lang: str = DefaultLang
 _locale_dir: str = ""
+_LANGUAGE_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "i18n.json"
 
 
 def _normalize_lang(s: str) -> str:
@@ -83,12 +84,33 @@ def _load_messages(lang: str) -> dict[str, str]:
     return msgs
 
 
+def _language_override() -> str:
+    try:
+        with _LANGUAGE_CONFIG_PATH.open(encoding="utf-8") as config_file:
+            config = json.load(config_file)
+    except FileNotFoundError:
+        return ""
+    except (OSError, ValueError) as exc:
+        logger.debug(
+            "Cannot load language preference: %s", exc, extra={"file_only": True}
+        )
+        return ""
+
+    value = config.get("language") if isinstance(config, dict) else None
+    if isinstance(value, str):
+        value = value.strip().lower()
+        if value in (LangZhCN, LangZhTW, LangEnUS, LangJaJP, LangKoKR):
+            return value
+    return ""
+
+
 def init():
     """初始化 i18n：检测语言 → 加载翻译 JSON。在 main.py agent() 中 AgentServer.start_up() 前调用。"""
     global _messages, _current_lang, _locale_dir
 
     raw = pienv.client_language()
-    lang = _normalize_lang(raw) if raw else DefaultLang
+    preferred = _language_override() or raw
+    lang = _normalize_lang(preferred) if preferred else DefaultLang
     _locale_dir = _resolve_locale_dir()
     _messages = _load_messages(lang)
     _current_lang = lang

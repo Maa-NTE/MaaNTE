@@ -1,6 +1,7 @@
-"""通过 MaaFramework pipeline focus 协议向 MXU 客户端发送用户可见消息。"""
+"""向 MXU 发送 focus 消息，向其他客户端输出可见日志。"""
 
 from maa.context import Context
+from utils import pienv
 from utils.logger import logger
 from utils.i18n import T
 
@@ -8,9 +9,9 @@ _FOCUS_NODE = "_MAANTE_FOCUS_"
 
 
 def Print(context: Context, content: str):
-    """向 MXU 发送 focus 消息（原样文本，不做 i18n）。context 为 MaaFramework Context 对象。"""
-    if context is None:
-        logger.warning("context is None, skip sending focus")
+    """通过客户端支持的通道显示文本；不做 i18n。"""
+    if pienv.client_name().strip().upper() != "MXU" or context is None:
+        logger.info("%s", content)
         return
 
     pipeline_override = {
@@ -23,11 +24,21 @@ def Print(context: Context, content: str):
     }
 
     try:
-        context.run_action(_FOCUS_NODE, pipeline_override=pipeline_override)
+        result = context.run_action(_FOCUS_NODE, pipeline_override=pipeline_override)
     except Exception as e:
-        logger.warning(f"failed to send focus: {e}")
+        logger.debug(
+            "Failed to send focus: %s",
+            e,
+            exc_info=True,
+            extra={"file_only": True},
+        )
+        logger.info("%s", content)
+        return
+
+    if result is None or not result.success:
+        logger.info("%s", content)
 
 
 def PrintT(context: Context, key: str, *args):
-    """向 MXU 发送 focus 消息（i18n 版本）。key 为翻译键，*args 为 %-格式化参数。"""
+    """通过可见通道显示翻译文本；*args 为 %-格式化参数。"""
     Print(context, T(key, *args))

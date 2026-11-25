@@ -108,5 +108,10 @@
     "bidking.failed": "[경매의 왕] 입찰 실패（%s）",
     "volleyball_weekly.started": "[배구 (주간)] 작업 시작",
     "volleyball_weekly.playing": "[배구 (주간)] 경기 진행 중",
-    "volleyball_weekly.teammates_selected": "[배구 (주간)] 팀원 선택 완료"
+    "volleyball_weekly.teammates_selected": "[배구 (주간)] 팀원 선택 완료",
+    "navi.started": "온라인 지도 위치 표시가 시작되었습니다(포트 %s). 지도 페이지에서 실시간 위치 표시를 켜고 같은 포트로 연결하세요.",
+    "navi.network_positioning_active": "네트워크 위치 확인이 활성화되었습니다. 캐릭터 좌표를 온라인 지도에 전송하고 있습니다.",
+    "navi.port_unavailable": "온라인 지도 위치 표시를 시작할 수 없습니다. 포트 %s을(를) 사용할 수 없으며 다른 프로그램이 사용 중일 수 있습니다. 작업 설정과 지도 설정의 포트를 동일한 사용 가능한 포트(예: 14515)로 변경한 후 작업을 다시 시작하세요.",
+    "navi.invalid_settings": "온라인 지도 위치 표시 설정이 올바르지 않습니다. 포트, 도착 허용 범위, 샘플링 간격을 확인하세요.",
+    "navi.failed": "온라인 지도 위치 표시에 오류가 발생했습니다. 문제를 신고할 때 로그를 첨부해 주세요."
 }

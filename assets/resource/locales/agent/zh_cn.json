@@ -106,5 +106,10 @@
     "bidking.failed": "[拍卖之王] 出价失败（%s）",
     "volleyball_weekly.started": "[自动排球（周常）] 任务开始",
     "volleyball_weekly.playing": "[自动排球（周常）] 比赛进行中",
-    "volleyball_weekly.teammates_selected": "[自动排球（周常）] 队友选择完成"
+    "volleyball_weekly.teammates_selected": "[自动排球（周常）] 队友选择完成",
+    "navi.started": "在线地图定位已启动（端口 %s）。请在地图页面开启实时定位，并使用相同端口连接。",
+    "navi.network_positioning_active": "已启用网络定位，正在向在线地图同步角色坐标。",
+    "navi.port_unavailable": "在线地图定位启动失败：端口 %s 无法使用，可能已被其他程序占用。请将任务设置和地图设置中的端口都改为同一个空闲端口（例如 14515），然后重新启动任务。",
+    "navi.invalid_settings": "在线地图定位设置有误，请检查端口、到达容差和采样间隔。",
+    "navi.failed": "在线地图定位运行失败，请附上日志反馈问题。"
 }
