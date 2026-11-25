@@ -159,7 +159,7 @@ class CoordinatePositionProvider:
         self._capture: _CoordinateCapture | None = None
         self._capture_backend: str | None = None
         self._coordinate_active = False
-        self._debug = bool(debug)
+        self.debug = bool(debug)
         self._last_map_point: _MapPoint | None = None
         self._last_raw_coordinate: _RawPoint | None = None
         self._last_camera_pitch: float | None = None
@@ -210,7 +210,10 @@ class CoordinatePositionProvider:
             extra={"file_only": True},
         )
 
-    def locate(self, locator: Any, frame: Any) -> MapLocationResult:
+    def locate(
+        self, locator: Any, frame: Any, *, debug: bool | None = None
+    ) -> MapLocationResult:
+        debug = self.debug if debug is None else debug
         capture = self._capture
         if capture is None:
             if locator is None:
@@ -222,7 +225,7 @@ class CoordinatePositionProvider:
 
         pose = capture.read(max_age=_COORDINATE_SAMPLE_MAX_AGE)
         if pose is None:
-            if self._debug:
+            if debug:
                 logger.debug(
                     "Navi coordinate unavailable; source=coordinate stats=%s",
                     (
@@ -253,7 +256,7 @@ class CoordinatePositionProvider:
             or not math.isfinite(camera_heading)
         ):
             self._coordinate_active = False
-            if self._debug:
+            if debug:
                 logger.debug(
                     "Navi coordinate transform failed: "
                     "raw=(%.2f, %.2f, %.2f) source=coordinate",
@@ -284,7 +287,7 @@ class CoordinatePositionProvider:
         self._last_raw_coordinate = raw
         self._last_camera_pitch = camera_pitch
         self._last_camera_heading = camera_heading % 360.0
-        if self._debug:
+        if debug:
             logger.debug(
                 "Navi coordinate position: raw=(%.2f, %.2f, %.2f) "
                 "map=(%d, %d) pitch=%.2f heading=%.2f source=coordinate",

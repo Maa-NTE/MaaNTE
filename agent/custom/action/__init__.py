@@ -59,6 +59,7 @@ __all__ = [
     "OnlineMapNavigationAction",
     "LocalRouteNavigation",
     "LocalRouteNavigationAction",
+    "RunNavigationTaskAction",
     "LocalRouteNavigationUnitTestAction",
     "parse_route_waypoints",
     "resolve_route_json_path",

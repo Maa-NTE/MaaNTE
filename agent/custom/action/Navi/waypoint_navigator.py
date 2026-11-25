@@ -27,6 +27,8 @@ _CAPTURE_POLL_INTERVAL = 0.02
 
 # 空格键按住的时长，用于「按下」与「松开」之间留出一点游戏输入间隔。
 _JUMP_HOLD = 0.05
+# 以导航底图像素计，进入到达范围前留出一段落地距离。
+_JUMP_APPROACH_MARGIN = 12.0
 
 
 @dataclass
@@ -88,6 +90,7 @@ class WaypointNavigator:
         *,
         angle_backend: str = "auto",
         position_backend: str = "map",
+        position_provider: CoordinatePositionProvider | None = None,
         tolerance: float = 80.0,
         max_duration: float | None = None,
         frame_interval: float = 0.1,
@@ -96,7 +99,10 @@ class WaypointNavigator:
         should_cancel: Callable[[], bool] | None = None,
     ) -> None:
         self.context = context
-        self.controller = context.tasker.controller
+        # Maa Agent 每次从同一个 Tasker 取 controller 都会替换原生代理。
+        # 用独立的 Context 持有导航控制器，避免传送或拾取截图使它失效。
+        self._controller_context = context.clone()
+        self.controller = self._controller_context.tasker.controller
         self.tolerance = tolerance
         self.max_duration = max_duration
         self.debug = debug
@@ -130,30 +136,61 @@ class WaypointNavigator:
         self.current_point: tuple[int, int] | None = None
         self.locator: MapLocator | None = None
         self.position_provider: CoordinatePositionProvider | None = None
+        self._owned_position_provider: CoordinatePositionProvider | None = None
         self.predictor: AnglePredictor | None = None
+        self._visual_settings: tuple[str, bool] | None = None
         self._network_position_reported = False
         try:
-            self.position_provider = CoordinatePositionProvider(
-                position_backend,
-                debug=debug,
-            )
-            if self.position_provider.uses_visual_positioning():
-                self.locator = MapLocator(debug=debug)
-                self.predictor = AnglePredictor(
-                    backend=angle_backend,
-                    threshold=0.0,
-                    debug=debug,
+            if position_provider is None:
+                self._owned_position_provider = CoordinatePositionProvider(
+                    position_backend, debug=debug
                 )
-            else:
-                self.frame_interval = _NETWORK_FRAME_INTERVAL
+                position_provider = self._owned_position_provider
+            self.configure_positioning(
+                position_provider, angle_backend, frame_interval, debug
+            )
+        except Exception:
+            self.close()
+            raise
+
+    def configure_positioning(
+        self,
+        provider: CoordinatePositionProvider,
+        angle_backend: str,
+        frame_interval: float,
+        debug: bool,
+    ) -> None:
+        previous_provider = self.position_provider
+        self.position_provider = provider
+        self.debug = debug
+        provider.debug = debug
+        if not provider.uses_visual_positioning():
+            self.frame_interval = _NETWORK_FRAME_INTERVAL
+            self.map_size = MapLocator.MAP_SIZE
+            if provider is not previous_provider:
                 logger.debug(
                     "Navi network pose active: visual angle predictor disabled, "
                     "control_rate=60Hz",
                     extra={"file_only": True},
                 )
-        except Exception:
-            self.close()
-            raise
+            return
+
+        self.frame_interval = max(0.05, float(frame_interval))
+        if self.locator is None or self.locator.debug != debug:
+            if self.locator is not None:
+                self.locator.close()
+                self.locator = None
+            self.locator = MapLocator(debug=debug)
+        self.map_size = self.locator.origin_w, self.locator.origin_h
+        if self._visual_settings != (angle_backend, debug):
+            if self.predictor is not None:
+                self.predictor.close()
+                self.predictor = None
+            self._visual_settings = None
+            self.predictor = AnglePredictor(
+                backend=angle_backend, threshold=0.0, debug=debug
+            )
+            self._visual_settings = (angle_backend, debug)
 
     def reset_jumps(self) -> None:
         self._next_jump_at = None
@@ -301,24 +338,29 @@ class WaypointNavigator:
 
             desired_angle = math.degrees(math.atan2(dx, -dy)) % 360.0
             angle_delta = (desired_angle - angle.angle + 540.0) % 360.0 - 180.0
+            facing_target = abs(angle_delta) <= self.max_turn_degrees
+            # 网络定位能在原地读到相机朝向。急转弯时先停步，等下一帧确认方向。
+            turn_in_place = location.camera_heading is not None and not facing_target
+            if turn_in_place and self.w_down:
+                self.release()
             turn_degrees = self.turn_pid.update(angle_delta, time.monotonic())
             turn_dx = int(round(turn_degrees * self.turn_pixels_per_degree))
-
-            self.press_forward()
+            if turn_dx != 0:
+                self.controller.post_relative_move(turn_dx, 0).wait()
+            if not turn_in_place:
+                self.press_forward()
 
             now = time.monotonic()
-            will_jump = False
             if self.jump_enabled:
                 if self._next_jump_at is None:
                     self._next_jump_at = now + self.jump_interval
-                will_jump = now >= self._next_jump_at
-
-            if will_jump:
-                self.jump()
-                self._next_jump_at = time.monotonic() + self.jump_interval
-
-            if turn_dx != 0:
-                self.controller.post_relative_move(turn_dx, 0).wait()
+                elif (
+                    now >= self._next_jump_at
+                    and facing_target
+                    and distance > self.tolerance + _JUMP_APPROACH_MARGIN
+                ):
+                    self.jump()
+                    self._next_jump_at = time.monotonic() + self.jump_interval
 
             if not self.sleep_interruptible(self.move_pulse):
                 self.release()
@@ -329,12 +371,13 @@ class WaypointNavigator:
             if now - last_log_time >= 2.0:
                 logger.debug(
                     "WaypointNavigator moving: target=%s current=%s distance=%.1f "
-                    "angle_delta=%.1f turn=%.1f",
+                    "angle_delta=%.1f turn=%.1f forward=%s",
                     target,
                     location.point,
                     distance,
                     angle_delta,
                     turn_degrees,
+                    self.w_down,
                 )
                 last_log_time = now
 
@@ -372,9 +415,10 @@ class WaypointNavigator:
             self.release()
         finally:
             try:
-                if self.position_provider is not None:
-                    self.position_provider.close()
-                    self.position_provider = None
+                if self._owned_position_provider is not None:
+                    self._owned_position_provider.close()
+                    self._owned_position_provider = None
+                self.position_provider = None
             finally:
                 try:
                     if self.locator is not None:

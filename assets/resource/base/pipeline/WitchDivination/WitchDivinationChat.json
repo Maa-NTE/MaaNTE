@@ -46,7 +46,7 @@
             "ShuffleStepSkipDialogue1"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "ShuffleStepSkipDialogue1": {

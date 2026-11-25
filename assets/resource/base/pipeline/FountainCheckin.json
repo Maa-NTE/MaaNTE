@@ -1,5 +1,19 @@
 {
     "FountainCheckinEntrance": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "run_navigation_task",
+                "custom_action_param": {
+                    "entry": "FountainCheckinMain"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "FountainCheckinMain": {
         "desc": "喷泉打卡入口",
         "next": [
             "FountainCheckTeleportRequired",

@@ -1,5 +1,7 @@
 import json
 import math
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +28,7 @@ DEFAULT_FRAME_INTERVAL = 0.1
 __all__ = [
     "LocalRouteNavigation",
     "LocalRouteNavigationAction",
+    "RunNavigationTaskAction",
     "LocalRouteNavigationUnitTestAction",
     "parse_optional_bool",
     "parse_optional_duration",
@@ -194,6 +197,11 @@ class LocalRouteNavigation:
             self._route_json = json.load(file)
         self._route_json_path = route_json_path
 
+    def select_route_file(self, json_path: str | Path) -> None:
+        path = resolve_route_json_path(json_path)
+        if self._route_json_path != path:
+            self.load_route_json(path)
+
     def run_route(
         self,
         route_json: RouteJson | None = None,
@@ -265,13 +273,61 @@ class LocalRouteNavigation:
             return json.load(file), route_path
 
 
-@AgentServer.custom_action("local_route_navigation")
-class LocalRouteNavigationAction(CustomAction):
+_task_navigators: dict[int, LocalRouteNavigation] = {}
+
+
+def get_task_navigation(task_id: int) -> LocalRouteNavigation | None:
+    return _task_navigators.get(task_id)
+
+
+@contextmanager
+def _navigation_task(
+    context: "Context", task_id: int
+) -> Iterator[LocalRouteNavigation]:
+    navigator = get_task_navigation(task_id)
+    if navigator is not None:
+        yield navigator
+        return
+
+    # run_task 是同步调用。由外层回调持有 Context，内层节点返回后它仍然有效。
+    with LocalRouteNavigation(context) as navigator:
+        _task_navigators[task_id] = navigator
+        try:
+            yield navigator
+        finally:
+            del _task_navigators[task_id]
+
+
+@AgentServer.custom_action("run_navigation_task")
+class RunNavigationTaskAction(CustomAction):
     def run(
         self, context: "Context", argv: CustomAction.RunArg
     ) -> CustomAction.RunResult:
         try:
-            params = load_params(argv.custom_action_param)
+            entry = load_params(argv.custom_action_param).get("entry")
+            if not isinstance(entry, str) or not entry or entry == argv.node_name:
+                raise ValueError("entry must reference a different pipeline node")
+            with _navigation_task(context, argv.task_detail.task_id):
+                result = context.run_task(entry)
+                return CustomAction.RunResult(
+                    success=result is not None and result.status.succeeded
+                )
+        except Exception:
+            logger.exception("Navigation task failed: %s", argv.node_name)
+            return CustomAction.RunResult(success=False)
+
+
+@AgentServer.custom_action("local_route_navigation")
+class LocalRouteNavigationAction(CustomAction):
+    @staticmethod
+    def route_params(custom_action_param: Any) -> dict[str, Any]:
+        return load_params(custom_action_param)
+
+    def run(
+        self, context: "Context", argv: CustomAction.RunArg
+    ) -> CustomAction.RunResult:
+        try:
+            params = self.route_params(argv.custom_action_param)
             json_path = params.get("json_path")
             if not json_path:
                 raise ValueError("json_path is required")
@@ -291,22 +347,22 @@ class LocalRouteNavigationAction(CustomAction):
             max_duration = parse_optional_duration(params.get("max_duration"))
             periodic_jump = parse_optional_bool(params.get("periodic_jump"))
 
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             logger.error("LocalRouteNavigation param invalid: %s", exc)
             return CustomAction.RunResult(success=False)
 
         try:
-            with LocalRouteNavigation(
-                context,
-                json_path,
-                tolerance=tolerance,
-                frame_interval=frame_interval,
-                angle_backend=angle_backend,
-                position_backend=position_backend,
-                debug=debug,
-                max_duration=max_duration,
-                periodic_jump=periodic_jump,
-            ) as navigator:
+            with _navigation_task(context, argv.task_detail.task_id) as navigator:
+                navigator.select_route_file(json_path)
+                navigator.runner.configure(
+                    tolerance=tolerance,
+                    frame_interval=frame_interval,
+                    angle_backend=angle_backend,
+                    position_backend=position_backend,
+                    debug=debug,
+                    max_duration=max_duration,
+                    periodic_jump=periodic_jump,
+                )
                 success = navigator.run_route(
                     route_name=route_name,
                     segment_index=segment_index,
@@ -318,41 +374,14 @@ class LocalRouteNavigationAction(CustomAction):
 
 
 @AgentServer.custom_action("local_route_navigation_unit_test")
-class LocalRouteNavigationUnitTestAction(CustomAction):
-    def run(
-        self, context: "Context", argv: CustomAction.RunArg
-    ) -> CustomAction.RunResult:
-        try:
-            params = load_params(argv.custom_action_param)
-            tolerance = float(params.get("tolerance", DEFAULT_TOLERANCE))
-            frame_interval = max(
-                0.05,
-                float(params.get("frame_interval", DEFAULT_FRAME_INTERVAL)),
-            )
-            angle_backend = str(params.get("angle_backend", "auto")).strip() or "auto"
-            position_backend = (
-                str(params.get("position_backend", "map")).strip() or "map"
-            )
-            debug = bool(params.get("debug", False))
-        except ValueError as exc:
-            logger.error("LocalRouteNavigationUnitTest param invalid: %s", exc)
-            return CustomAction.RunResult(success=False)
-
-        try:
-            with LocalRouteNavigation(
-                context,
-                "penquan",
-                tolerance=tolerance,
-                frame_interval=frame_interval,
-                angle_backend=angle_backend,
-                position_backend=position_backend,
-                debug=debug,
-            ) as navigator:
-                success = navigator.run_route(
-                    route_name="penquan",
-                    segment_index=1,
-                )
-            return CustomAction.RunResult(success=success)
-        except Exception as exc:
-            logger.error("LocalRouteNavigationUnitTest failed: %s", exc)
-            return CustomAction.RunResult(success=False)
+class LocalRouteNavigationUnitTestAction(LocalRouteNavigationAction):
+    @staticmethod
+    def route_params(custom_action_param: Any) -> dict[str, Any]:
+        return {
+            **load_params(custom_action_param),
+            "json_path": "penquan",
+            "route_name": "penquan",
+            "segment_index": 1,
+            "max_duration": None,
+            "periodic_jump": False,
+        }

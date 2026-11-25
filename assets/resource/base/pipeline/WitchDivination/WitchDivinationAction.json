@@ -29,7 +29,7 @@
             "WitchDivinationSelectYiWen"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationSelectYiWen": {
@@ -69,7 +69,7 @@
             "WitchDivinationDivineYiWen"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationDivineYiWen": {
@@ -111,7 +111,7 @@
             "WitchDivinationSelectYiWen"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationCheckNoChancesYiWen": {
@@ -136,7 +136,7 @@
             "WitchDivinationSelectCiFu"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationSelectCiFu": {
@@ -176,7 +176,7 @@
             "WitchDivinationDivineCiFu"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationDivineCiFu": {
@@ -218,7 +218,7 @@
             "WitchDivinationSelectCiFu"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationCheckNoChancesCiFu": {
@@ -243,7 +243,7 @@
             "WitchDivinationSelectXunBao"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationSelectXunBao": {
@@ -283,7 +283,7 @@
             "WitchDivinationDivineXunBao"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationDivineXunBao": {
@@ -347,7 +347,7 @@
             "WitchDivinationActionEnd1S"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationEscThenBackToAnchor": {

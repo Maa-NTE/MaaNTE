@@ -4,6 +4,7 @@ from typing import Any, Callable
 
 from maa.context import Context
 
+from .coordinate_position import CoordinatePositionProvider
 from .map_locator import MapLocator
 from .waypoint_navigator import WaypointNavigator
 from .route_model import RouteSession, SourceSize, Waypoint
@@ -37,10 +38,48 @@ class RouteRunner:
         self.max_duration = max_duration
         self.periodic_jump = periodic_jump
         self.navigator: WaypointNavigator | None = None
-        self._source_size: SourceSize = MapLocator.MAP_SIZE
+        self._position_providers: dict[str, CoordinatePositionProvider] = {}
         self._current_point: Waypoint | None = None
         self._moving_target: tuple[int, Waypoint] | None = None
         self._lock = threading.Lock()
+
+    def configure(
+        self,
+        *,
+        position_backend: str,
+        angle_backend: str,
+        debug: bool,
+        tolerance: float,
+        frame_interval: float,
+        max_duration: float | None,
+        periodic_jump: bool,
+    ) -> None:
+        self.position_backend = position_backend
+        self.angle_backend = angle_backend
+        self.debug = debug
+        self.tolerance = tolerance
+        self.frame_interval = max(0.05, frame_interval)
+        self.max_duration = max_duration
+        self.periodic_jump = periodic_jump
+        if self.navigator is not None:
+            self.navigator.tolerance = tolerance
+            self.navigator.max_duration = max_duration
+            self.navigator.configure_positioning(
+                self.get_position_provider(position_backend),
+                angle_backend,
+                frame_interval,
+                debug,
+            )
+
+    def get_position_provider(self, backend: str) -> CoordinatePositionProvider:
+        backend = backend.strip().lower()
+        if backend not in self._position_providers:
+            provider = CoordinatePositionProvider(backend, debug=self.debug)
+            self._position_providers[backend] = provider
+            if not provider.uses_visual_positioning():
+                # 两种模式共享已启动的抓包。中间切换到视觉定位也保留到任务结束。
+                self._position_providers.update(auto=provider, coordinate=provider)
+        return self._position_providers[backend]
 
     def start(self) -> None:
         if self.navigator is not None:
@@ -48,7 +87,7 @@ class RouteRunner:
         self.navigator = WaypointNavigator(
             self.context,
             angle_backend=self.angle_backend,
-            position_backend=self.position_backend,
+            position_provider=self.get_position_provider(self.position_backend),
             tolerance=self.tolerance,
             frame_interval=self.frame_interval,
             debug=self.debug,
@@ -56,13 +95,6 @@ class RouteRunner:
             should_cancel=self._should_cancel,
             max_duration=self.max_duration,
         )
-        if self.navigator.locator is None:
-            self._source_size = MapLocator.MAP_SIZE
-        else:
-            self._source_size = (
-                self.navigator.locator.origin_w,
-                self.navigator.locator.origin_h,
-            )
 
     def run_until_stopped(
         self,
@@ -72,6 +104,7 @@ class RouteRunner:
     ) -> str:
         self.start()
         assert self.navigator is not None
+        self.navigator.reset_jumps()
 
         while not self.context.tasker.stopping:
             if on_tick is not None:
@@ -115,9 +148,14 @@ class RouteRunner:
             target = waypoints[current_index]
             with self._lock:
                 self._moving_target = (current_index, target)
-            arrived = self.navigator.move_to(target)
-            with self._lock:
-                self._moving_target = None
+            try:
+                arrived = self.navigator.move_to(target)
+            except Exception:
+                self.navigator.release()
+                raise
+            finally:
+                with self._lock:
+                    self._moving_target = None
             if arrived:
                 self.route.advance()
                 continue
@@ -138,18 +176,28 @@ class RouteRunner:
         return "stopped"
 
     def close(self) -> None:
-        if self.navigator is not None:
-            self.navigator.close()
-            self.navigator = None
+        try:
+            if self.navigator is not None:
+                self.navigator.close()
+                self.navigator = None
+        finally:
+            for provider in set(self._position_providers.values()):
+                provider.close()
+            self._position_providers.clear()
 
     def update_current_frame(self) -> Waypoint | None:
         self.start()
         assert self.navigator is not None
-        self.navigator.update()
-        return self.current_point()
+        result = self.navigator.update()
+        # 传送后首帧可能没有坐标。用上一段的缓存选最近路径点会跳过段首。
+        if result is None:
+            return None
+        location, _ = result
+        return location.point if location.found else None
 
     def source_size(self) -> SourceSize:
-        return self._source_size
+        navigator = self.navigator
+        return navigator.map_size if navigator is not None else MapLocator.MAP_SIZE
 
     def current_point(self) -> Waypoint | None:
         with self._lock:

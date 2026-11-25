@@ -7,11 +7,17 @@ import json
 import logging
 import math
 import time
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 import sys
 import types
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from ..Navi.coordinate_position import CoordinatePositionProvider
+    from ..Navi.map_locator import MapLocator
+    from ..Navi.route_runner import RouteRunner
 
 try:
     from maa.agent.agent_server import AgentServer
@@ -217,24 +223,24 @@ def visual_locate(
     *,
     get_frame: Callable[[], Any | None] | None = None,
     debug: bool = False,
+    provider: CoordinatePositionProvider | None = None,
+    locator: MapLocator | None = None,
 ) -> Any | None:
     if frame is None and get_frame is not None:
         frame = get_frame()
     if frame is None:
         return None
 
-    MapLocator = load_map_locator_class()
-    CoordinatePositionProvider = load_coordinate_position_provider_class()
-    logging.getLogger(MapLocator.__module__).setLevel(logging.WARNING)
-    locator = MapLocator(debug=debug)
-    provider = CoordinatePositionProvider("map", debug=debug)
-    try:
+    with ExitStack() as resources:
+        if locator is None or locator.debug != debug:
+            locator_class = load_map_locator_class()
+            logging.getLogger(locator_class.__module__).setLevel(logging.WARNING)
+            locator = locator_class(debug=debug)
+            resources.callback(locator.close)
+        if provider is None:
+            provider = load_coordinate_position_provider_class()("map", debug=debug)
+            resources.callback(provider.close)
         return provider.locate(locator, frame)
-    finally:
-        try:
-            provider.close()
-        finally:
-            locator.close()
 
 
 def locate_current_position(
@@ -245,31 +251,55 @@ def locate_current_position(
     coordinate_timeout: float = DEFAULT_COORDINATE_TIMEOUT,
     coordinate_interval: float = DEFAULT_COORDINATE_INTERVAL,
     debug: bool = False,
+    runner: RouteRunner | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> Any | None:
     backend = str(position_backend or DEFAULT_POSITION_BACKEND).strip().lower()
-    CoordinatePositionProvider = load_coordinate_position_provider_class()
-    provider = CoordinatePositionProvider(backend, debug=debug)
-    try:
+    if should_stop is not None and should_stop():
+        return None
+    with ExitStack() as resources:
+        locator = None
+        if runner is None:
+            provider = load_coordinate_position_provider_class()(backend, debug=debug)
+            resources.callback(provider.close)
+        else:
+            provider = runner.get_position_provider(backend)
+            if runner.navigator is not None:
+                locator = runner.navigator.locator
         if provider.uses_visual_positioning():
-            locator_result = visual_locate(frame, get_frame=get_frame, debug=debug)
-            if locator_result is not None:
-                return locator_result
-            return None
+            return visual_locate(
+                frame,
+                get_frame=get_frame,
+                debug=debug,
+                provider=provider,
+                locator=locator,
+            )
 
         deadline = time.monotonic() + max(float(coordinate_timeout), 0.0)
         while True:
-            result = provider.locate(None, None)
+            if should_stop is not None and should_stop():
+                return None
+            result = provider.locate(None, None, debug=debug)
             if result.found and result.point is not None:
                 return result
-            if time.monotonic() >= deadline:
+            now = time.monotonic()
+            if now >= deadline:
                 break
-            time.sleep(max(float(coordinate_interval), 0.05))
+            next_sample = min(deadline, now + max(float(coordinate_interval), 0.05))
+            while (remaining := next_sample - time.monotonic()) > 0:
+                if should_stop is not None and should_stop():
+                    return None
+                time.sleep(remaining if should_stop is None else min(remaining, 0.1))
 
         if backend == "auto":
-            return visual_locate(frame, get_frame=get_frame, debug=debug)
+            return visual_locate(
+                frame,
+                get_frame=get_frame,
+                debug=debug,
+                locator=locator,
+                provider=runner.get_position_provider("map") if runner else None,
+            )
         return None
-    finally:
-        provider.close()
 
 
 def check_teleport_required(
@@ -283,6 +313,8 @@ def check_teleport_required(
     coordinate_interval: float = DEFAULT_COORDINATE_INTERVAL,
     get_frame: Callable[[], Any | None] | None = None,
     debug: bool = False,
+    runner: RouteRunner | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> TeleportDecision | None:
     frame = None
     if target is None:
@@ -297,6 +329,8 @@ def check_teleport_required(
         coordinate_timeout=coordinate_timeout,
         coordinate_interval=coordinate_interval,
         debug=debug,
+        runner=runner,
+        should_stop=should_stop,
     )
     if result is None or not result.found or result.point is None:
         return None
@@ -381,6 +415,11 @@ if AgentServer is not None and CustomAction is not None:
                 return context.tasker.controller.post_screencap().wait().get()
 
             try:
+                navigation = None
+                if __package__:
+                    from ..Navi.local_route_navigation import get_task_navigation
+
+                    navigation = get_task_navigation(argv.task_detail.task_id)
                 decision = check_teleport_required(
                     target,
                     threshold=threshold,
@@ -390,6 +429,8 @@ if AgentServer is not None and CustomAction is not None:
                     coordinate_interval=coordinate_interval,
                     get_frame=get_frame,
                     debug=debug,
+                    runner=navigation.runner if navigation is not None else None,
+                    should_stop=lambda: context.tasker.stopping,
                 )
             except Exception as exc:
                 print(f"CheckTeleportRequired failed: {exc}")

@@ -8,6 +8,20 @@
     // 5. 和黑羽对话选择 [卜运]
     // 6. 依次选择每一个占卜，直至全部没有使用次数后结束任务
     "WitchDivinationEntrance": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "run_navigation_task",
+                "custom_action_param": {
+                    "entry": "WitchDivinationMain"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "WitchDivinationMain": {
         "desc": "魔女之家占卜入口",
         "action": "DoNothing",
         "next": [
@@ -67,7 +81,7 @@
             "WitchDivinationActionEnd"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationCheckTodayGuide": {
@@ -100,7 +114,7 @@
             "WitchDivinationPressEscTwice"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationMoveToWitchHouse": {
@@ -166,7 +180,7 @@
         "post_wait_freezes": 500, // 点击后等待全屏稳定 
         "next": [
             "WitchDivinationVerifyWitchHouse",
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationVerifyWitchHouse": {
@@ -198,7 +212,7 @@
             "WitchDivinationTeleportToWitchHouse"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationTeleportToWitchHouse": {
@@ -232,7 +246,7 @@
             "ShuffleStepWalk"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     },
     "WitchDivinationPressEscTwice": {
@@ -282,7 +296,7 @@
             "StopNode"
         ],
         "on_error": [
-            "WitchDivinationEntrance"
+            "WitchDivinationMain"
         ]
     }
 }

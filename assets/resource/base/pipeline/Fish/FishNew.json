@@ -1,5 +1,19 @@
 {
     "FishNewEntrance": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "run_navigation_task",
+                "custom_action_param": {
+                    "entry": "FishNewMain"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    },
+    "FishNewMain": {
         "desc": "钓鱼(新)功能入口",
         "anchor": "FishNewErrorRestart",
         "next": [

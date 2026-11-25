@@ -1,10 +1,18 @@
 {
     "LocalRouteNavigationMemoryTest": {
         "desc": "Memory test entry for repeated local_route_navigation custom actions.",
-        "action": "DoNothing",
-        "next": [
-            "LocalRouteNavigationMemoryTest01Segment1"
-        ]
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "run_navigation_task",
+                "custom_action_param": {
+                    "entry": "LocalRouteNavigationMemoryTest01Segment1"
+                }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
     },
     "LocalRouteNavigationMemoryTest01Segment1": {
         "desc": "Memory test round 01, unittest segment 1.",

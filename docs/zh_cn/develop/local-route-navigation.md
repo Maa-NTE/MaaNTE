@@ -83,9 +83,34 @@
 
 CustomAction 返回 `success=True` 表示该 segment 跑到终点；参数错误、路线为空、运行异常或任务停止会返回失败。
 
+### 同一任务内的多个寻路节点
+
+在任务入口使用 `run_navigation_task`，将 `entry` 指向原流程的首个节点。钓鱼、喷泉打卡和魔女占卜都使用这个入口。
+
+```jsonc
+{
+    "FishNewEntrance": {
+        "action": {
+            "type": "Custom",
+            "param": {
+                "custom_action": "run_navigation_task",
+                "custom_action_param": { "entry": "FishNewMain" }
+            }
+        },
+        "rate_limit": 0,
+        "pre_delay": 0,
+        "post_delay": 0
+    }
+}
+```
+
+在 `FishNewMain` 及其后续节点中照常使用 `local_route_navigation`。路线文件、路线段、到达距离和超时都按当前节点的参数生效。流程需要回到起点时，跳转到 `FishNewMain`。
+
+同一次任务的寻路节点共用一个导航实例，`check_teleport_required` 也可共用它的定位来源。首次定位或寻路时才初始化相应资源。任务完成、失败或手动停止时会关闭资源，再次运行任务会获得新实例。单独运行一个寻路节点时，资源随该节点结束而释放。
+
 ## Python 类接口
 
-当一个 Python CustomAction 里需要连续执行多个 segment 时，使用 `LocalRouteNavigation`。不要在同一个函数里反复调用 Pipeline 入口，否则每次都会重新初始化定位器和方向模型。
+自动捡钱包等 Python CustomAction 可以在一个 `with` 块里连续执行多个 segment，并在离开时关闭导航实例。
 
 ```python
 from .Navi.local_route_navigation import LocalRouteNavigation
@@ -214,9 +239,10 @@ navigator.close()
 
 执行时会先把路线点转换到当前 `MapLocator` 的地图尺寸，再从当前位置附近的路径点开始跑。每到达一个点，`RouteSession` 推进到下一个点，直到所有点完成。
 
+使用网络定位时，相机与目标的夹角超过 35° 会先松开前进键，转向后再根据新的朝向继续走。启用周期跳跃时，只有朝向目标且距到达范围超过 12 个地图像素才会起跳。
+
 ## 注意事项
 
-- 长路线拆成多个 segment 时，Pipeline 入口适合一次跑一个 segment；Python 内部连续跑多个 segment 时用 `LocalRouteNavigation` 类复用资源。
 - `tolerance` 太小会导致角色在目标点附近反复调整；地图定位误差较大时应适当增大。
 - `position_backend=coordinate` 依赖网络抓包后端。启动时优先使用 Scapy + libpcap（Npcap/WinPcap），不可用时尝试 `pktmon-interface`；pktmon 后端通常需要以管理员权限运行。两者都不可用则失败；`auto` 模式在两种网络后端都启动失败时回退完整视觉方案。网络定位成功启用后，位置与摄像机朝向均使用 1.2 核心 `read()` 的网络数据，不再初始化小地图视觉定位或 `AnglePredictor`，也不会为这两项功能额外截图。Navi 以 `CoordinateCapture(refresh_rate=0, capture_backend=...)` 启动核心，不限制样本发布刷新率，并以 60 Hz 运行导航控制循环。网络样本暂时中断时位置状态为 `coordinate_stale`，不会回退视觉。
 - WebSocket 位置统一使用游戏原始坐标。网络定位发送 `x/y/z`，并通过顶层 `angle`、`pitch` 发送映射后的水平摄像机角和原始俯仰角；视觉定位通过标定逆变换发送 `x/y`，不发送无法可靠推导的高度 `z` 或俯仰角。网络样本短暂中断时会保留最后一次位置用于地图展示，但该位置不会被导航逻辑视为有效实时位置。
